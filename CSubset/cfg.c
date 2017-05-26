@@ -2,39 +2,34 @@
 #include <stdlib.h>
 #include <assert.h>
 
-
 #include "csg.h"
-
-
-
+#define MAX_LIVENESS 50
 
 typedef struct BlockDesc *Block; 
 
 typedef struct BlockDesc {
+  int parentCount;
+  int* parentList;
   Block fail, branch; // jump targets
   CSGNode first, last; // pointer to first and last instruction in basic block
-    
   int blockId;
 } BlockDesc;
 
-// typedef struct node leader;
 typedef struct leader{
   int id;
   CSGNode node;
   struct leader *next;
-}leader;
+} leader;
 
 int blockCount = 1;
 leader *headLeader = NULL;
 int leaderCount = 0;
 
-int cmpfunc (const void * a, const void * b)
-{
+int cmpfunc (const void * a, const void * b){
    return ( *(int*)a - *(int*)b );
 }
 
-void collectLeader(int line, CSGNode node)
-{
+void collectLeader(int line, CSGNode node){
   leader *ptt = headLeader; 
   if (ptt == NULL)
   {
@@ -77,6 +72,7 @@ Block createBlock(CSGNode node, int BlockId ){
   block->blockId = BlockId;
   return block;
 }
+
 Block findBlock(Block *block, int line){
   int j = 0;
   for (j = 0 ; j < leaderCount ; j++){
@@ -103,71 +99,23 @@ void getTemporaryVariable(CSGNode x){
   }
 }
 
-void calculateLiveness(Block *block){
-  register CSGNode i;
-  i = code;
-  while (i != NULL) {
-    printf("    instr %d: ", i->line);
-    
-    switch (i->op) {
-      case iadd: printf("add"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case isub: printf("sub"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case imul: printf("mul"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case idiv: printf("div"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case imod: printf("mod"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case ineg: printf("neg"); getTemporaryVariable(i->x); break;
-
-      case iparam: printf("param"); getTemporaryVariable(i->x); break;
-      case ienter: printf("enter"); break;
-      case ileave: printf("leave"); break;
-      case iret: printf("ret"); break;
-      case iend: printf("end"); break;
-
-      case icall: printf("call"); getTemporaryVariable(i->x); break;
-      case ibr: printf("br"); PrintBrakNode(i->x); break;
-
-      case iblbc: printf("blbc"); getTemporaryVariable(i->x); PrintBrakNode(i->y); break;
-      case iblbs: printf("blbs"); getTemporaryVariable(i->x); PrintBrakNode(i->y); break;
-
-      case icmpeq: printf("cmpeq"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case icmple: printf("cmple"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case icmplt: printf("cmplt"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-
-      case iread: printf("read"); break;
-      case iwrite: printf("write"); getTemporaryVariable(i->x); break;
-      case iwrl: printf("wrl"); break;
-
-      case iload: printf("load"); PrintNode(i->x); break;
-      case istore: printf("store"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-      case imove: printf("move"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
-
-      case inop: printf("nop"); break;
-      default: printf("unknown instruction");
-    }
-    printf("\n");
-      
-    i = i->nxt;
-      
-  }
-}
-
 void printCFG(Block *block){
   CSGNode i;
   i = code;
   int j = 0;
   for (j = 0 ; j < leaderCount ; j++)
   {
-    // printf("--------------\n");
     printf("*** block %d ", block[j]->blockId);
     printf("fail "); if(block[j]->fail) printf("%d", block[j]->fail->blockId); else printf("-");
     printf(" branch "); if(block[j]->branch) printf("%d", block[j]->branch->blockId); else printf("-");
     printf(" first "); if(block[j]->first) printf("%d", block[j]->first->line); else printf("-");
     printf(" last "); if(block[j]->last) printf("%d", block[j]->last->line); else printf("-");
+    printf(", Parent Count: %d", block[j]->parentCount);
     printf("\n");
     i = block[j]->first;
-    // continue;
-    // printf("%d\n %d %d\n",j,block[j]->first->line,block[j]->last->line);
+
     while (1) {
+      printf("    Request Liveness: %d\n", i->requestLivenessSize);
       printf("    instr %d: ", i->line);
       switch (i->op) {
         case iadd: printf("add"); PrintNode(i->x); PrintNode(i->y); break;
@@ -208,7 +156,6 @@ void printCFG(Block *block){
       if (i == block[j]->last)
         break;
       i = i->nxt;
-      
     }
   }
 }
@@ -263,13 +210,13 @@ Block* generateCFG(){
       ptt = ptt->next;
     }
     block[j] = createBlock(ptt->node,j+1);
-    
   }
   
   i = code;
   j = 1;
   while (i != NULL){
     switch(i->op){
+
       case iblbc:
       case iblbs:
         if (i->line == arrayLeader[j]-1){
@@ -281,9 +228,9 @@ Block* generateCFG(){
           block[j-1]->fail = tmp;
           block[j-1]->last = i;
           j++;
-
         }
         break;
+
       case ibr:
         if (i->line == arrayLeader[j]-1){
           tmp = findBlock(block,i->x->line);
@@ -294,12 +241,14 @@ Block* generateCFG(){
           j++;
         }
         break;
+        
       case iend:
       case iret:
         block[j-1]->last = i; 
         block[j-1]->branch = NULL;   
         j++;     
         break;
+
       default:
         if(i->nxt && i->line == arrayLeader[j]-1){
           tmp = findBlock(block,i->nxt->line);
@@ -310,12 +259,298 @@ Block* generateCFG(){
         }
         break;
     }
-    // printf("%d %d %d-------->>>\n",i->line,arrayLeader[j]-1,i->op);
     
     i = i->nxt;
-    // printCFG(block);  
   }
-  
 
   return block;
 }
+
+int* initBlockLink(Block *block, int *enterBlockListCount)
+{
+  CSGNode i;
+  i = code;
+  int j = 0;
+  // Sum parent count
+  for (j = 0 ; j < leaderCount ; j++)
+  {
+    if(block[j]->fail)
+      block[block[j]->fail->blockId-1]->parentCount++;
+    if(block[j]->branch)
+      block[block[j]->branch->blockId-1]->parentCount++;
+  }
+  (*enterBlockListCount) = 0;
+  for (j = 0 ; j < leaderCount ; j++)
+  {
+    if(block[j]->parentCount == 0 )
+    {
+      (*enterBlockListCount)++;
+    }
+  }
+  int * enterBlockList =  malloc(sizeof(int) * (*enterBlockListCount));
+  int tmpCount = 0;
+  for (j = 0 ; j < leaderCount ; j++)
+  {
+    if(block[j]->parentCount == 0 )
+    {
+      enterBlockList[tmpCount++] = j;
+    }
+  }
+
+  // Init Request Liveness
+  for (j = 0 ; j < leaderCount ; j++)
+  {
+    i = block[j]->first;
+    while (1) {
+      i->requestLivenessList = (char*)malloc(sizeof(char) * MAX_LIVENESS);
+      i->requestLivenessSize = 0;
+      if (i == block[j]->last)
+        break;
+      i = i->nxt;
+    }
+  }
+  return enterBlockList;
+}
+
+int* initBlockLink(Block *block, int *enterBlockListCount);
+
+Block* duplicateBlock(Block *ori_block)
+{
+  CSGNode i, k;
+  // Declar Array with size
+  Block* res_block = malloc(sizeof(*res_block) * leaderCount);
+  
+  int j = 0;
+  // For each block
+  for (j = 0 ; j < leaderCount ; j++)
+  {
+    // Declar requestLiveness for each instr
+    i = ori_block[j]->first;
+    res_block[j] = malloc(sizeof(struct BlockDesc));
+    res_block[j]->first = malloc(sizeof(CSGNode));
+    k = res_block[j]->first;
+    // For each instr
+    while (1) {
+      
+      if (i == ori_block[j]->last)
+      {
+        res_block[j]->last = k;
+        break;
+      }
+      i = i->nxt;
+      k->requestLivenessList = (char*)malloc(sizeof(char) * MAX_LIVENESS);
+      k->requestLivenessSize = 0;
+      k->nxt = malloc(sizeof(CSGNode));
+      k = k->nxt;
+    }
+  }
+  
+  return res_block;
+}
+
+void copyLiveness(Block *block_src, Block *block_dst)
+{
+  CSGNode src_ptr, dst_ptr;
+  
+  int i = 0;
+  // For each block
+  for (i = 0 ; i < leaderCount ; i++)
+  {
+    src_ptr = block_src[i]->first;
+    dst_ptr = block_dst[i]->first;
+    // For each instr
+    while(1)
+    {
+      dst_ptr->requestLivenessSize = src_ptr->requestLivenessSize;
+      int j = 0;
+      // Copy all liveness status
+      for (j=0; j<dst_ptr->requestLivenessSize; j++)
+      {
+        dst_ptr->requestLivenessList[j] = src_ptr->requestLivenessList[j];
+      }
+      
+      if(src_ptr == block_src[i]->last)
+        break;
+      src_ptr = src_ptr->nxt;
+      dst_ptr = dst_ptr->nxt;
+    }
+  }
+}
+
+void clearVisited(Block *block)
+{
+  CSGNode i;
+  int j;
+  for (j=0;j<leaderCount;j++)
+  {
+    i = block[j]->first;
+    while(1)
+    {
+      i->isVisited = 0;
+      if(i == block[j]->last)
+        break;
+      i = i->nxt;
+    }
+  }
+}
+
+int isAllStateEqual(Block *block_A, Block *block_B)
+{
+  CSGNode A_ptr, B_ptr;
+  
+  int i = 0;
+  // For each block
+  for (i = 0 ; i < leaderCount ; i++)
+  {
+    A_ptr = block_A[i]->first;
+    B_ptr = block_B[i]->first;
+    // For each instr
+    while(1)
+    {
+      int j = 0;
+      // Compare all liveness status
+      for (j=0; j < A_ptr->requestLivenessSize; j++)
+      {
+        if(A_ptr->requestLivenessList[j] != B_ptr->requestLivenessList[j])
+        {
+          return 0;
+        }
+      }
+      
+      if(A_ptr == block_A[i]->last)
+        break;
+      A_ptr = A_ptr->nxt;
+      B_ptr = B_ptr->nxt;
+    }
+
+  }
+
+  return 1;
+}
+
+void printInstrLiveness(Block *block)
+{
+  CSGNode i;
+  int j;
+  for (j=0;j<leaderCount;j++)
+  {
+    printf("Block %d\n", j+1);
+    i = block[j]->first;
+    while(1)
+    {
+      printf("  Request: %d\n", i->requestLivenessSize);
+      if(i == block[j]->last)
+        break;
+      i = i->nxt;
+    }
+  }
+}
+
+void calculateLiveness(Block *block)
+{
+  int enterBlockListCount = 0;
+  int* enterBlockList = initBlockLink(block, &enterBlockListCount);
+  register CSGNode i;
+  i = code;
+
+  Block* prev_block = duplicateBlock(block);
+
+  // copyLiveness(block, prev_block);
+  // clearVisited(block);
+  if(isAllStateEqual(block, prev_block) == 1)
+  {
+    printf("Two state are equal!\n");
+  }
+  else
+  {
+    printf("Two state are NOT equal\n");
+  }
+  
+}
+
+void calculateLiveness_Padunk(Block *block){
+
+  register CSGNode i;
+  i = code;
+
+  while (i != NULL) {
+  
+    printf("    instr %d: ", i->line);
+    
+    switch (i->op) {
+  
+      case iadd: printf("add"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case isub: printf("sub"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case imul: printf("mul"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case idiv: printf("div"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case imod: printf("mod"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case ineg: printf("neg"); getTemporaryVariable(i->x); break;
+
+      case iparam: printf("param"); getTemporaryVariable(i->x); break;
+      case ienter: printf("enter"); break;
+      case ileave: printf("leave"); break;
+      case iret: printf("ret"); break;
+      case iend: printf("end"); break;
+
+      case icall: printf("call"); getTemporaryVariable(i->x); break;
+      case ibr: printf("br"); PrintBrakNode(i->x); break;
+
+      case iblbc: printf("blbc"); getTemporaryVariable(i->x); PrintBrakNode(i->y); break;
+      case iblbs: printf("blbs"); getTemporaryVariable(i->x); PrintBrakNode(i->y); break;
+
+      case icmpeq: printf("cmpeq"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case icmple: printf("cmple"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case icmplt: printf("cmplt"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+
+      case iread: printf("read"); break;
+      case iwrite: printf("write"); getTemporaryVariable(i->x); break;
+      case iwrl: printf("wrl"); break;
+
+      case iload: printf("load"); PrintNode(i->x); break;
+      case istore: printf("store"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+      case imove: printf("move"); getTemporaryVariable(i->x); getTemporaryVariable(i->y); break;
+
+      case inop: printf("nop"); break;
+      default: printf("unknown instruction");
+    }
+    printf("\n");
+      
+    i = i->nxt;
+      
+  }
+}
+
+/*
+Liveness Algo
+
+do
+{
+  clearVisit(instr_head)
+  instr_prev = instr_head
+  updateLiveness(instr_head)
+
+}while( !isAllLivenessEqual(instr_head, instr_prev) )
+
+func clearVisit(instr head)
+{
+  clear all instr visited = false
+}
+
+func updateLiveness(instr)
+{
+  if(instr already visited)
+    return
+
+  applyRule
+  visited = true
+
+  forall child in instr:
+    updateLiveness(child)
+}
+
+func isAllLivenessEqual(instr_prev, instr_head)
+{
+  return true, false
+}
+
+*/

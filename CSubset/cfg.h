@@ -15,4 +15,5 @@ typedef struct BlockDesc {
 // extern Block block;
 extern Block* generateCFG(void);
 extern void printCFG(Block*);
+extern void calculateLiveness(Block *block);
 #endif

@@ -800,11 +800,17 @@ int main(int argc, char *argv[])
   if (argc >= 2) {
     Compile(argv[1]);
   } else {
-    Compile("test.c");
+    Compile("samples/qsort.cs");
   }
   // CSGDecode();
  
+  printf("----------------Generating CFG----------------\n");
   block  = generateCFG();
+  printf("----------------Print CFG---------------------\n");
+  printCFG(block);
+  printf("----------------Calculating Liveness----------\n");
+  calculateLiveness(block);
+   printf("----------------Print CFG---------------------\n");
   printCFG(block);
 
   return 0;

@@ -46,6 +46,10 @@ typedef struct CSGNodeDesc {
   CSGNode prv, nxt;  // previous and next instruction
   int line;  // line number for printing purposes
   CSGNode true, false;  // Jmp: true and false chains;  Proc: entry point;
+
+  char *requestLivenessList;
+  int requestLivenessSize;
+  int isVisited;
 } CSGNodeDesc;
 
 extern CSGType CSGlongType, CSGboolType;
