@@ -807,11 +807,11 @@ int main(int argc, char *argv[])
   printf("----------------Generating CFG----------------\n");
   block  = generateCFG();
   printf("----------------Print CFG---------------------\n");
-  printCFG(block);
+  // printCFG(block);
   printf("----------------Calculating Liveness----------\n");
   calculateLiveness(block);
    printf("----------------Print CFG---------------------\n");
-  printCFG(block);
+  // printCFG(block);
 
   return 0;
 }
